@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { uploadImage } from "@/api/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Image } from "@/components/ui/image";
 import CategorySelect from "@/components/wishlist/CategorySelect";
 import { cn } from "@/lib/utils";
-import { Loader2, Upload, ImagePlus } from "lucide-react";
+import { Loader2, ImagePlus } from "lucide-react";
 
 const normalizeUrl = (value) => {
   const trimmed = (value || "").trim();
@@ -44,8 +44,8 @@ export default function ManualItemForm({
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setImageUrl(file_url);
+      const url = await uploadImage(file);
+      setImageUrl(url);
     } catch (e) {
       setError("Image upload failed. Try a different file.");
     } finally {

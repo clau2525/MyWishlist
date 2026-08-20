@@ -1,24 +1,31 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { listItems } from "@/api/wishlist";
+import { useOwner } from "@/lib/OwnerContext";
 import AddItemButton from "@/components/wishlist/AddItemButton";
 import WishlistCard from "@/components/wishlist/WishlistCard";
 import CategoryFilter from "@/components/wishlist/CategoryFilter";
-import { Gift, Loader2 } from "lucide-react";
+import UnlockDialog from "@/components/UnlockDialog";
+import { Button } from "@/components/ui/button";
+import { Gift, Loader2, Lock, LockOpen, AlertCircle } from "lucide-react";
 
 const BOUGHT = "__bought__";
 
 export default function Wishlist() {
+  const { isOwner, checking, lock } = useOwner();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [unlockOpen, setUnlockOpen] = useState(false);
 
   const loadItems = async () => {
     setLoading(true);
+    setLoadError("");
     try {
-      const list = await base44.entities.WishlistItem.list("-created_date", 200);
-      setItems(list);
+      setItems(await listItems(200));
     } catch (e) {
       setItems([]);
+      setLoadError(e.message || "Could not load your wishlist.");
     } finally {
       setLoading(false);
     }
@@ -80,8 +87,35 @@ export default function Wishlist() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">My Wishlist</h1>
           </div>
-          <AddItemButton categories={allTags} onAdded={handleAdded} />
+
+          {/* Visitors get a read-only page; the owner unlocks editing once per
+              browser and the session sticks around after that. */}
+          <div className="flex items-center gap-2">
+            {isOwner && <AddItemButton categories={allTags} onAdded={handleAdded} />}
+            {!checking && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 rounded-2xl text-muted-foreground"
+                title={isOwner ? "Lock editing" : "Unlock editing"}
+                aria-label={isOwner ? "Lock editing" : "Unlock editing"}
+                onClick={() => (isOwner ? lock() : setUnlockOpen(true))}
+              >
+                {isOwner ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              </Button>
+            )}
+          </div>
         </header>
+
+        {loadError && (
+          <div className="mb-8 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Couldn't load the wishlist</p>
+              <p className="text-xs text-muted-foreground">{loadError}</p>
+            </div>
+          </div>
+        )}
 
         {items.length > 0 && (
           <div className="mb-8">
@@ -100,7 +134,11 @@ export default function Wishlist() {
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : visibleItems.length === 0 ? (
-          <EmptyState hasItems={items.length > 0} viewingBought={selectedCategory === BOUGHT} />
+          <EmptyState
+            hasItems={items.length > 0}
+            viewingBought={selectedCategory === BOUGHT}
+            canEdit={isOwner}
+          />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {visibleItems.map((item) => (
@@ -108,6 +146,7 @@ export default function Wishlist() {
                 key={item.id}
                 item={item}
                 categories={allTags}
+                canEdit={isOwner}
                 onDeleted={handleDeleted}
                 onSaved={handleSaved}
               />
@@ -115,11 +154,13 @@ export default function Wishlist() {
           </div>
         )}
       </div>
+
+      <UnlockDialog open={unlockOpen} onOpenChange={setUnlockOpen} />
     </div>
   );
 }
 
-function EmptyState({ hasItems, viewingBought }) {
+function EmptyState({ hasItems, viewingBought, canEdit }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border py-20 text-center">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
@@ -137,7 +178,9 @@ function EmptyState({ hasItems, viewingBought }) {
           ? "Mark an item as bought and it'll show up here, out of your active wishlist."
           : hasItems
           ? "Try a different category, or add a new item above."
-          : "Paste a link above to save your first want — we'll pull the picture, price and details automatically."}
+          : canEdit
+          ? "Paste a link above to save your first want — we'll pull the picture, price and details automatically."
+          : "Nothing here yet — check back soon."}
       </p>
     </div>
   );

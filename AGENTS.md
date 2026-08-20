@@ -2,33 +2,46 @@
 
 ## Project Context
 
-This is a Base44 app repository. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
+Wishlistify: a static React wishlist app on GitHub Pages, backed by Supabase
+(Postgres + Storage + Edge Functions). Treat it as user-owned application code,
+keep changes focused on the user's request, and preserve existing conventions.
 
-Start with `README.md` for local setup, environment variables, and publish workflow.
+Start with `README.md` for setup, environment variables, and the deploy flow.
 
-## Base44 References
+## Access model — read before touching auth or RLS
 
-- CLI overview: https://docs.base44.com/developers/references/cli/get-started/overview.md
-- Agent skills: https://docs.base44.com/developers/backend/overview/skills.md
+The app has **no login screen**. Anyone with the URL can read the wishlist;
+writes require unlocking with a passphrase, which is a plain Supabase password
+sign-in against one owner account (`VITE_OWNER_EMAIL`).
 
-If your agent supports Agent Skills, install or update Base44 skills before Base44-specific work:
+`VITE_SUPABASE_ANON_KEY` is inlined into the published bundle and is therefore
+public. The RLS policies in `supabase/migrations/0001_init.sql` are the only
+access control. Two rules follow:
 
-```bash
-npx skills add base44/skills
-```
+- Never add an `anon` policy for `insert`/`update`/`delete` on `wishlist_items`
+  or the `wishlist-images` bucket.
+- Never put the `service_role` key anywhere the frontend or the repo can see it.
+  It belongs only in the shell that runs `scripts/import-from-base44.mjs`.
 
 ## Key Files
 
-- `src/`: frontend application source.
-- `src/api/base44Client.js`: frontend Base44 SDK client.
-- `vite.config.js`: Vite config and Base44 Vite plugin setup.
-- `.env.local`: local-only environment values; never commit secrets.
+- `src/api/supabaseClient.js`: the single Supabase client. Sessions persist in
+  localStorage; `detectSessionInUrl` is off because HashRouter owns the URL hash.
+- `src/api/wishlist.js`: all `wishlist_items` reads and writes. The `WRITABLE`
+  allowlist keeps server-managed columns out of client payloads.
+- `src/lib/OwnerContext.jsx`: unlock/lock state; `isOwner` gates every edit control.
+- `supabase/migrations/0001_init.sql`: schema, RLS, storage bucket.
+- `supabase/functions/scrape-url/index.ts`: Deno Edge Function. Runs its own auth
+  check (`verify_jwt = false` in `supabase/config.toml`) because the anon key
+  passes Supabase's built-in JWT verification — the manual `getUser` call is what
+  distinguishes a real owner session.
 
 ## Working Notes
 
-- Use `base44 dev` as the default local development command when you need the local Base44 backend. It can run the backend and frontend together.
-- When docs or code mention the frontend being started automatically, that usually means the Base44 project config includes `site.serveCommand`, for example `"serveCommand": "npm run dev"` in `base44/config.jsonc`.
-- Use `npm run dev` only for frontend-only work against the hosted Base44 backend.
-- Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.
-- Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.
-- Run the relevant checks from `package.json` before finishing code changes.
+- `npm run dev` for the frontend; it needs `.env.local` (see `.env.example`).
+- Edge Function changes need a redeploy: `supabase functions deploy scrape-url`.
+- Schema changes: add a new numbered file in `supabase/migrations/` and run it in
+  the Supabase SQL editor. Nothing applies migrations automatically.
+- Vite's `base` comes from `BASE_PATH`, set by CI to `/<repo-name>/`. Leave it
+  unset locally.
+- Run `npm run lint` and `npm run build` before finishing code changes.

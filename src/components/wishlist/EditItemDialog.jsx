@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { updateItem, deleteItem } from "@/api/wishlist";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ export default function EditItemDialog({ item, categories, onSaved, onDeleted })
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSubmit = async (data) => {
-    const updated = await base44.entities.WishlistItem.update(item.id, data);
+    const updated = await updateItem(item.id, data);
     onSaved && onSaved(updated);
     setOpen(false);
   };
@@ -25,7 +25,7 @@ export default function EditItemDialog({ item, categories, onSaved, onDeleted })
   const handleDelete = async () => {
     setBusy(true);
     try {
-      await base44.entities.WishlistItem.delete(item.id);
+      await deleteItem(item.id);
       onDeleted && onDeleted(item);
       setOpen(false);
     } finally {

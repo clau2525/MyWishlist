@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Tag, ArrowUpRight, Check } from "lucide-react";
 import EditItemDialog from "@/components/wishlist/EditItemDialog";
 
-export default function WishlistCard({ item, categories, onSaved, onDeleted }) {
+export default function WishlistCard({ item, categories, canEdit, onSaved, onDeleted }) {
   const bought =
     !!item.bought ||
     (Array.isArray(item.category) ? item.category : []).some(
@@ -59,6 +59,7 @@ export default function WishlistCard({ item, categories, onSaved, onDeleted }) {
         </div>
       </a>
 
+      {canEdit && (
       <div className="absolute right-2 top-2 z-10">
         <EditItemDialog
           item={item}
@@ -67,6 +68,7 @@ export default function WishlistCard({ item, categories, onSaved, onDeleted }) {
           onDeleted={onDeleted}
         />
       </div>
+      )}
     </div>
   );
 }

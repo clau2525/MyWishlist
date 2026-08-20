@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { createItem } from "@/api/wishlist";
+import { scrapeUrl } from "@/api/scrape";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CategorySelect from "@/components/wishlist/CategorySelect";
@@ -30,10 +31,24 @@ export default function AddItemForm({ categories, onAdded }) {
     }
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("scrapeUrl", { url: finalUrl });
-      const data = res.data;
-      if (data && data.error) throw new Error(data.error);
-      const item = await base44.entities.WishlistItem.create({
+      // Only an unreadable *page* should drop us into manual entry. A failure
+      // to save afterwards is a different problem and needs to say so, rather
+      // than blaming the link.
+      let data;
+      try {
+        data = await scrapeUrl(finalUrl);
+      } catch {
+        setManual({
+          title: "",
+          price: "",
+          image_url: "",
+          source_url: finalUrl,
+          category: tags,
+        });
+        return;
+      }
+
+      const item = await createItem({
         title: data.title || finalUrl,
         price: data.price || "€",
         image_url: data.image_url || "",
@@ -45,20 +60,14 @@ export default function AddItemForm({ categories, onAdded }) {
       setUrl("");
       setTags([]);
     } catch (err) {
-      setManual({
-        title: "",
-        price: "",
-        image_url: "",
-        source_url: finalUrl,
-        category: tags,
-      });
+      setError(err.message || "Could not save that item.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleManualSubmit = async (data) => {
-    const item = await base44.entities.WishlistItem.create(data);
+    const item = await createItem(data);
     onAdded && onAdded(item);
     setManual(null);
     setUrl("");
