@@ -67,11 +67,12 @@ jobs:
 
           npm run build
 
-      # enablement turns Pages on via the API if it is still switched off, so a
-      # forgotten Settings -> Pages -> Source doesn't fail the deploy job.
+      # Deliberately no `enablement: true`. Auto-enabling needs the API to be
+      # willing to create a Pages site, which it refuses when the repo is
+      # private on a free plan — turning a one-click settings fix into an
+      # opaque "Resource not accessible by integration". Enable Pages once by
+      # hand: Settings -> Pages -> Source -> GitHub Actions.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
