@@ -32,24 +32,46 @@ jobs:
         env:
           # A project site lives at /<repo>/, so assets need that prefix.
           BASE_PATH: /${{ github.event.repository.name }}/
-          # Repository *variables*, not secrets — on purpose. Vite inlines these
-          # into the published JavaScript, so they are public the moment the
-          # site goes live. Storing them as variables keeps that honest and
-          # lets you read them back when debugging. Access is controlled by the
-          # RLS policies in supabase/migrations/0001_init.sql instead.
-          # Set them under: Settings -> Secrets and variables -> Actions -> Variables
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_OWNER_EMAIL: ${{ vars.VITE_OWNER_EMAIL }}
+          # Read from the Variables tab, falling back to Secrets. These belong in
+          # Variables — Vite inlines them into the published JavaScript, so they
+          # are public the moment the site goes live, and Variables stay readable
+          # for debugging. But "Variables" and "Secrets" are two tabs on one
+          # settings page and are trivial to mix up, so accept either rather than
+          # failing a build over which tab someone clicked.
+          # Real access control lives in supabase/migrations/0001_init.sql (RLS).
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_OWNER_EMAIL: ${{ vars.VITE_OWNER_EMAIL || secrets.VITE_OWNER_EMAIL }}
         run: |
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set."
-            echo "::error::Add them under Settings -> Secrets and variables -> Actions -> Variables."
+          # Report which names are missing. Prints only set/MISSING, never a value.
+          missing=0
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY VITE_OWNER_EMAIL; do
+            if [ -n "${!name}" ]; then
+              echo "  $name: set"
+            else
+              echo "  $name: MISSING"
+              [ "$name" = "VITE_OWNER_EMAIL" ] || missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Required build variables are missing (see the list above)."
+            echo "::error::Add them at Settings -> Secrets and variables -> Actions."
+            echo "::error::Either the Variables or the Secrets tab works. Names must match exactly, including the VITE_ prefix."
             exit 1
           fi
+
+          if [ -z "$VITE_OWNER_EMAIL" ]; then
+            echo "::warning::VITE_OWNER_EMAIL is not set — the site will publish, but the passphrase unlock cannot work without it."
+          fi
+
           npm run build
 
+      # enablement turns Pages on via the API if it is still switched off, so a
+      # forgotten Settings -> Pages -> Source doesn't fail the deploy job.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
