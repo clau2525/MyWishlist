@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useOwner } from '@/lib/OwnerContext';
 import { Loader2, KeyRound } from 'lucide-react';
 
-export default function UnlockDialog({ open, onOpenChange }) {
+export default function UnlockDialog({ slug, name, open, onOpenChange }) {
   const { unlock } = useOwner();
   const [passphrase, setPassphrase] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +17,7 @@ export default function UnlockDialog({ open, onOpenChange }) {
     setError('');
     setBusy(true);
     try {
-      await unlock(passphrase);
+      await unlock(slug, passphrase);
       setPassphrase('');
       onOpenChange(false);
     } catch (err) {
@@ -36,7 +36,7 @@ export default function UnlockDialog({ open, onOpenChange }) {
             Unlock editing
           </DialogTitle>
           <DialogDescription>
-            Enter your passphrase to add and edit items. This browser will stay unlocked.
+            Enter the passphrase for {name} to add and edit items. This browser will stay unlocked.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

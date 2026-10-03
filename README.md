@@ -1,10 +1,11 @@
 # Wishlistify
 
-A shareable wishlist. Paste a product link, it pulls the picture, title and
-price. Anyone with the link can browse it; only you can change it.
+Shareable wishlists. Each person gets their own list at their own link
+(`…/#/claudia`, `…/#/anna`) with their own items and tags. Anyone with the link
+can browse it; only that person can change it.
 
 Runs entirely on free tiers: **GitHub Pages** for the site, **Supabase** for the
-database, image storage and the link scraper.
+database and image storage.
 
 ---
 
@@ -14,17 +15,21 @@ There is no login screen. Instead:
 
 | Who | Can do |
 | --- | --- |
-| Anyone with the link | View the wishlist |
-| You, after entering the passphrase once | Add, edit, delete, upload pictures |
+| Anyone with the link | View any wishlist |
+| A list's owner, after tapping the lock and entering their passphrase | Add, edit, delete, upload pictures — on their own list only |
 
-The passphrase unlocks a single Supabase account and the browser remembers it,
-so you type it once per device.
+Each list belongs to one Supabase account; the passphrase is that account's
+password. The browser remembers it, so it's typed once per device. One browser
+holds one unlocked list at a time.
+
+The bare site link (`…/#/`) lists every wishlist, or jumps straight to it when
+there is only one.
 
 > **Why it's built this way.** Vite bakes `VITE_SUPABASE_ANON_KEY` into the
 > published JavaScript, so that key is public no matter what you do — anyone can
 > read it out of the page source. The [Row Level Security policies](supabase/migrations/0001_init.sql)
 > are the actual protection: they let the anonymous role *read* and nothing else.
-> Every write requires a real signed-in session.
+> Every write requires a signed-in session belonging to that list's owner.
 >
 > The one key you must never publish is the **`service_role`** key. It bypasses
 > RLS entirely. It belongs only in your local shell when running the import
@@ -41,12 +46,18 @@ so you type it once per device.
    [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql), and run it.
    That creates the `wishlist_items` table, the RLS policies, and the
    `wishlist-images` storage bucket.
+3. Do the same with
+   [`supabase/migrations/0002_multiple_wishlists.sql`](supabase/migrations/0002_multiple_wishlists.sql).
+   **Edit the three `EDIT` lines in step 4 first** (your link name, page title
+   and the email you unlock with). That creates your list and moves any
+   existing items onto it. If the account doesn't exist yet, do step 2 below
+   first.
 
-### 2. Create your owner account
+### 2. Create an account per person
 
 1. Go to **Authentication → Users → Add user**.
-2. Enter an email and a password. **The password is your edit passphrase.**
-3. Tick *Auto Confirm User* so you don't have to click a confirmation email.
+2. Enter an email and a password. **The password is that person's edit passphrase.**
+3. Tick *Auto Confirm User* so nobody has to click a confirmation email.
 
 Then turn off public signups, so nobody can mint their own write-access account:
 **Authentication → Sign In / Providers → Email →** turn *Allow new users to sign up* **off**.
@@ -57,59 +68,45 @@ Then turn off public signups, so nobody can mint their own write-access account:
 cp .env.example .env.local
 ```
 
-Fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (Supabase → Project
-Settings → API) and `VITE_OWNER_EMAIL` (the email from step 2).
+Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Supabase → Project
+Settings → API).
 
 ```bash
 npm install
 npm run dev
 ```
 
-### 4. Deploy the link scraper
-
-Product pages don't send CORS headers, so the browser can't fetch them directly.
-A Supabase Edge Function does it instead — 500K invocations/month on the free tier.
-
-```bash
-npm install -g supabase
-```
-
-```bash
-supabase login
-```
-
-```bash
-supabase link --project-ref YOUR-PROJECT-REF
-```
-
-```bash
-supabase functions deploy scrape-url
-```
-
-Your project ref is the subdomain of your Supabase URL
-(`https://abcdefgh.supabase.co` → `abcdefgh`).
-
-Without this step everything still works — pasting a link just falls back to the
-manual "type it in yourself" form.
-
-### 5. Publish to GitHub Pages
+### 4. Publish to GitHub Pages
 
 1. Push this repo to GitHub.
 2. **Settings → Pages → Source:** select **GitHub Actions**.
 3. **Settings → Secrets and variables → Actions → Variables → New variable**,
-   add all three:
+   add both:
 
    | Name | Value |
    | --- | --- |
    | `VITE_SUPABASE_URL` | `https://YOUR-REF.supabase.co` |
    | `VITE_SUPABASE_ANON_KEY` | your anon key |
-   | `VITE_OWNER_EMAIL` | your owner email |
 
    These are *Variables*, not *Secrets*, deliberately — they end up in the public
    bundle regardless, and variables stay readable for debugging.
 
 4. Push to `main`. [The workflow](.github/workflows/deploy.yml) builds and
    publishes to `https://<your-username>.github.io/<repo-name>/`.
+
+---
+
+## Adding someone else's wishlist
+
+Create their account as above, then in the **SQL Editor** run:
+
+```sql
+select public.create_wishlist('anna', 'Anna''s Wishlist', 'anna@example.com');
+```
+
+Their list is now at `…/#/anna`. The first argument is the end of the link
+(lowercase letters, digits and dashes); the second is the title on the page.
+Tags are per list automatically — every list only sees its own.
 
 ---
 
@@ -120,12 +117,13 @@ manual "type it in yourself" form.
    → API). It bypasses RLS, which is why it runs locally and never ships:
 
 ```bash
-SUPABASE_URL=https://YOUR-REF.supabase.co SUPABASE_SERVICE_ROLE_KEY=eyJ... node scripts/import-from-base44.mjs ~/Downloads/export.json
+SUPABASE_URL=https://YOUR-REF.supabase.co SUPABASE_SERVICE_ROLE_KEY=eyJ... node scripts/import-from-base44.mjs ~/Downloads/export.json claudia
 ```
 
 Base44's image URLs die once you leave the platform, so the script downloads each
-picture and re-uploads it to Supabase Storage. Re-running is safe — items already
-imported are matched on their link and skipped.
+picture and re-uploads it to Supabase Storage. The last argument is the list to
+import into. Re-running is safe — items already on that list are matched on
+their link and skipped.
 
 ---
 
@@ -133,11 +131,11 @@ imported are matched on their link and skipped.
 
 | Path | What |
 | --- | --- |
-| `src/api/` | Supabase client, wishlist CRUD, storage upload, scraper call |
+| `src/api/` | Supabase client, wishlist CRUD, storage upload |
 | `src/lib/OwnerContext.jsx` | Unlock/lock state |
-| `src/pages/Wishlist.jsx` | The one page |
+| `src/pages/Wishlist.jsx` | One list (`/#/<slug>`) |
+| `src/pages/WishlistDirectory.jsx` | The bare link (`/#/`): all lists |
 | `supabase/migrations/` | Schema + RLS. Run in the SQL editor |
-| `supabase/functions/scrape-url/` | Link scraper (Deno) |
 | `scripts/import-from-base44.mjs` | One-time data migration |
 
 ## Commands

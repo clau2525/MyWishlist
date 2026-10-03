@@ -1,6 +1,1 @@
 project_id = "wishlistify"
-
-[functions.scrape-url]
-# The function does its own auth check (see index.ts) so it can tell a real
-# owner session apart from the public anon key, which passes verify_jwt.
-verify_jwt = false

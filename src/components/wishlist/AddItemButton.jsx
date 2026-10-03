@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import AddItemForm from "@/components/wishlist/AddItemForm";
 import { Plus } from "lucide-react";
 
-export default function AddItemButton({ categories, onAdded }) {
+export default function AddItemButton({ wishlistId, categories, onAdded }) {
   const [open, setOpen] = useState(false);
 
   const handleAdded = (item) => {
@@ -30,7 +30,7 @@ export default function AddItemButton({ categories, onAdded }) {
         <DialogHeader>
           <DialogTitle>Add to wishlist</DialogTitle>
         </DialogHeader>
-        <AddItemForm categories={categories} onAdded={handleAdded} />
+        <AddItemForm wishlistId={wishlistId} categories={categories} onAdded={handleAdded} />
       </DialogContent>
     </Dialog>
   );

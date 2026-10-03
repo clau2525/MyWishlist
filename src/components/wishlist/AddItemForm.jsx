@@ -1,18 +1,19 @@
 import React, { useState } from "react";
 import { createItem } from "@/api/wishlist";
-import { scrapeUrl } from "@/api/scrape";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CategorySelect from "@/components/wishlist/CategorySelect";
 import ManualItemForm from "@/components/wishlist/ManualItemForm";
-import { Loader2, Link2, Plus, AlertCircle } from "lucide-react";
+import { Link2, ArrowRight } from "lucide-react";
 
-export default function AddItemForm({ categories, onAdded }) {
+// Two steps: paste the link (and pick tags), then fill in title, price and
+// picture by hand. Nothing tries to read the page — shops block that more often
+// than not, so the details are always typed in.
+export default function AddItemForm({ wishlistId, categories, onAdded }) {
   const [url, setUrl] = useState("");
   const [tags, setTags] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [manual, setManual] = useState(null);
+  const [details, setDetails] = useState(null);
 
   const normalizeUrl = (value) => {
     const trimmed = value.trim();
@@ -21,7 +22,7 @@ export default function AddItemForm({ categories, onAdded }) {
     return trimmed;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
     const finalUrl = normalizeUrl(url);
@@ -29,71 +30,32 @@ export default function AddItemForm({ categories, onAdded }) {
       setError("Paste a product link first.");
       return;
     }
-    setLoading(true);
-    try {
-      // Only an unreadable *page* should drop us into manual entry. A failure
-      // to save afterwards is a different problem and needs to say so, rather
-      // than blaming the link.
-      let data;
-      try {
-        data = await scrapeUrl(finalUrl);
-      } catch {
-        setManual({
-          title: "",
-          price: "",
-          image_url: "",
-          source_url: finalUrl,
-          category: tags,
-        });
-        return;
-      }
-
-      const item = await createItem({
-        title: data.title || finalUrl,
-        price: data.price || "€",
-        image_url: data.image_url || "",
-        source_url: data.source_url || finalUrl,
-        category: tags,
-        bought: tags.some((c) => c.toLowerCase() === "bought"),
-      });
-      onAdded && onAdded(item);
-      setUrl("");
-      setTags([]);
-    } catch (err) {
-      setError(err.message || "Could not save that item.");
-    } finally {
-      setLoading(false);
-    }
+    setDetails({
+      title: "",
+      price: "",
+      image_url: "",
+      source_url: finalUrl,
+      category: tags,
+    });
   };
 
-  const handleManualSubmit = async (data) => {
-    const item = await createItem(data);
+  const handleDetailsSubmit = async (data) => {
+    const item = await createItem(wishlistId, data);
     onAdded && onAdded(item);
-    setManual(null);
+    setDetails(null);
     setUrl("");
     setTags([]);
   };
 
-  if (manual) {
+  if (details) {
     return (
-      <div>
-        <div className="mb-4 flex items-start gap-2">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          <div>
-            <p className="text-sm font-medium">Couldn't read that link automatically</p>
-            <p className="text-xs text-muted-foreground">
-              No worries — add the details yourself and upload a picture.
-            </p>
-          </div>
-        </div>
-        <ManualItemForm
-          categories={categories}
-          initial={manual}
-          onSubmit={handleManualSubmit}
-          onCancel={() => setManual(null)}
-          submitLabel="Add item"
-        />
-      </div>
+      <ManualItemForm
+        categories={categories}
+        initial={details}
+        onSubmit={handleDetailsSubmit}
+        onCancel={() => setDetails(null)}
+        submitLabel="Add item"
+      />
     );
   }
 
@@ -106,28 +68,17 @@ export default function AddItemForm({ categories, onAdded }) {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Paste a product link"
           className="pl-9"
-          disabled={loading}
         />
       </div>
       <CategorySelect
         categories={categories}
         value={tags}
         onChange={setTags}
-        disabled={loading}
         placeholder="Tags (optional)"
       />
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Fetching…
-          </>
-        ) : (
-          <>
-            <Plus className="h-4 w-4 mr-2" />
-            Add to wishlist
-          </>
-        )}
+      <Button type="submit" className="w-full">
+        Next
+        <ArrowRight className="h-4 w-4 ml-2" />
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </form>

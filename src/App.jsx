@@ -8,6 +8,7 @@ import PageNotFound from '@/lib/PageNotFound';
 import { OwnerProvider } from '@/lib/OwnerContext';
 import ScrollToTop from '@/components/ScrollToTop';
 import Wishlist from '@/pages/Wishlist';
+import WishlistDirectory from '@/pages/WishlistDirectory';
 
 function App() {
   return (
@@ -16,7 +17,8 @@ function App() {
         <Router>
           <ScrollToTop />
           <Routes>
-            <Route path="/" element={<Wishlist />} />
+            <Route path="/" element={<WishlistDirectory />} />
+            <Route path="/:slug" element={<Wishlist />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>

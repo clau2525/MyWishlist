@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase, OWNER_EMAIL } from '@/api/supabaseClient';
+import { supabase } from '@/api/supabaseClient';
 
-// Who can edit. Reading the wishlist needs nothing at all (RLS lets the anon
+// Who can edit. Reading any wishlist needs nothing at all (RLS lets the anon
 // role select), so this context only ever gates the add/edit/delete controls.
-// "Unlocking" is a normal Supabase password sign-in against the one owner
-// account — the session lands in localStorage and refreshes itself, so the
-// passphrase is typed once per browser and not again.
+// "Unlocking" a list is a normal Supabase password sign-in against the account
+// that owns it — the session lands in localStorage and refreshes itself, so the
+// passphrase is typed once per browser and not again. One browser holds one
+// session, so unlocking a second list locks the first.
 const OwnerContext = createContext(null);
 
 export function OwnerProvider({ children }) {
@@ -32,26 +33,33 @@ export function OwnerProvider({ children }) {
     };
   }, []);
 
-  const unlock = useCallback(async (passphrase) => {
-    if (!OWNER_EMAIL) {
-      throw new Error('VITE_OWNER_EMAIL is not set — rebuild the site with it configured.');
-    }
-    const { error } = await supabase.auth.signInWithPassword({
-      email: OWNER_EMAIL,
-      password: passphrase,
-    });
+  const unlock = useCallback(async (slug, passphrase) => {
     // Don't leak whether the account exists; the only useful signal here is
     // "that passphrase was wrong".
-    if (error) throw new Error('That passphrase did not work.');
+    const fail = new Error('That passphrase did not work.');
+    const { data: email, error: lookupError } = await supabase.rpc('wishlist_login_email', {
+      p_slug: slug,
+    });
+    if (lookupError || !email) throw fail;
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password: passphrase });
+    if (error) throw fail;
   }, []);
 
   const lock = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
+  const userId = session?.user?.id ?? null;
+  // Pass the wishlist row being viewed; true only for the account that owns it.
+  const isOwnerOf = useCallback(
+    (wishlist) => !!userId && !!wishlist && wishlist.owner_id === userId,
+    [userId]
+  );
+
   const value = useMemo(
-    () => ({ isOwner: !!session, checking, unlock, lock }),
-    [session, checking, unlock, lock]
+    () => ({ isOwnerOf, checking, unlock, lock }),
+    [isOwnerOf, checking, unlock, lock]
   );
 
   return <OwnerContext.Provider value={value}>{children}</OwnerContext.Provider>;

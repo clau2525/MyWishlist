@@ -56,7 +56,11 @@ export default function CategorySelect({
     selected.length === 0 ? "" : selected.length === 1 ? selected[0] : `${selected.length} tags`;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // modal: the list is portaled outside the surrounding Dialog, whose scroll
+    // lock otherwise swallows wheel and touch scrolling inside it (only arrow
+    // keys got through). A modal popover takes over the lock and lets its own
+    // content scroll.
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <button
           type="button"

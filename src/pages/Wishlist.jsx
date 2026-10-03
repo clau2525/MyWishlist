@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { listItems } from "@/api/wishlist";
+import { useParams } from "react-router-dom";
+import { getWishlist, listItems } from "@/api/wishlist";
 import { useOwner } from "@/lib/OwnerContext";
+import PageNotFound from "@/lib/PageNotFound";
 import AddItemButton from "@/components/wishlist/AddItemButton";
 import WishlistCard from "@/components/wishlist/WishlistCard";
 import CategoryFilter from "@/components/wishlist/CategoryFilter";
@@ -10,30 +12,52 @@ import { Gift, Loader2, Lock, LockOpen, AlertCircle } from "lucide-react";
 
 const BOUGHT = "__bought__";
 
-export default function Wishlist() {
-  const { isOwner, checking, lock } = useOwner();
+// Keyed on the slug so moving between lists starts from fresh state (filters,
+// items) instead of briefly showing the previous person's list.
+export default function WishlistRoute() {
+  const { slug } = useParams();
+  return <Wishlist key={slug} slug={slug} />;
+}
+
+function Wishlist({ slug }) {
+  const { isOwnerOf, checking, lock } = useOwner();
+  const [wishlist, setWishlist] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [unlockOpen, setUnlockOpen] = useState(false);
 
-  const loadItems = async () => {
-    setLoading(true);
-    setLoadError("");
-    try {
-      setItems(await listItems(200));
-    } catch (e) {
-      setItems([]);
-      setLoadError(e.message || "Could not load your wishlist.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isOwner = isOwnerOf(wishlist);
 
   useEffect(() => {
-    loadItems();
-  }, []);
+    let active = true;
+    (async () => {
+      try {
+        const list = await getWishlist(slug);
+        if (!active) return;
+        if (!list) {
+          setNotFound(true);
+          return;
+        }
+        setWishlist(list);
+        const rows = await listItems(list.id, 200);
+        if (active) setItems(rows);
+      } catch (e) {
+        if (active) setLoadError(e.message || "Could not load this wishlist.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (wishlist) document.title = wishlist.name;
+  }, [wishlist]);
 
   const boughtItems = useMemo(() => items.filter((i) => !!i.bought), [items]);
   const activeItems = useMemo(() => items.filter((i) => !i.bought), [items]);
@@ -71,6 +95,9 @@ export default function Wishlist() {
   }, [activeItems, boughtItems, selectedCategory]);
 
   const handleAdded = (item) => setItems((prev) => [item, ...prev]);
+
+  if (notFound) return <PageNotFound />;
+
   const handleDeleted = (item) =>
     setItems((prev) => prev.filter((i) => i.id !== item.id));
   const handleSaved = (updated) =>
@@ -85,14 +112,18 @@ export default function Wishlist() {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
               <Gift className="h-5 w-5" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">My Wishlist</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+              {wishlist?.name ?? "\u00a0"}
+            </h1>
           </div>
 
           {/* Visitors get a read-only page; the owner unlocks editing once per
               browser and the session sticks around after that. */}
           <div className="flex items-center gap-2">
-            {isOwner && <AddItemButton categories={allTags} onAdded={handleAdded} />}
-            {!checking && (
+            {isOwner && (
+              <AddItemButton wishlistId={wishlist.id} categories={allTags} onAdded={handleAdded} />
+            )}
+            {!checking && wishlist && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -155,7 +186,14 @@ export default function Wishlist() {
         )}
       </div>
 
-      <UnlockDialog open={unlockOpen} onOpenChange={setUnlockOpen} />
+      {wishlist && (
+        <UnlockDialog
+          slug={wishlist.slug}
+          name={wishlist.name}
+          open={unlockOpen}
+          onOpenChange={setUnlockOpen}
+        />
+      )}
     </div>
   );
 }
@@ -179,7 +217,7 @@ function EmptyState({ hasItems, viewingBought, canEdit }) {
           : hasItems
           ? "Try a different category, or add a new item above."
           : canEdit
-          ? "Paste a link above to save your first want — we'll pull the picture, price and details automatically."
+          ? "Tap \"Add item\" above to save your first want."
           : "Nothing here yet — check back soon."}
       </p>
     </div>
