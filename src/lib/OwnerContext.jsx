@@ -36,7 +36,7 @@ export function OwnerProvider({ children }) {
   const unlock = useCallback(async (slug, passphrase) => {
     // Don't leak whether the account exists; the only useful signal here is
     // "that passphrase was wrong".
-    const fail = new Error('That passphrase did not work.');
+    const fail = new Error('That password did not work.');
     const { data: email, error: lookupError } = await supabase.rpc('wishlist_login_email', {
       p_slug: slug,
     });
